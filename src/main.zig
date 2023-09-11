@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const main_menu = @import("./main_menu.zig");
 const download = @import("./download.zig");
+const window = @import("./window.zig");
 
 const mem = std.mem;
 const json = std.json;
@@ -17,11 +17,14 @@ const ncurses = switch (builtin.os.tag) {
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const Cursor = @import("./cursor.zig");
+const MainWindow = @import("./MainWindow.zig");
+const TargetMenu = @import("./TargetMenu.zig");
+const JsonValue = std.json.Value;
+
+const DEFAULT_FOREGROUND = @import("./constants.zig").DEFAULT_FOREGROUND;
+const DEFAULT_BACKGROUND = @import("./constants.zig").DEFAULT_BACKGROUND;
 
 const compiler_json_link: []const u8 = "https://ziglang.org/download/index.json";
-
-const DEFAULT_FOREGROUND: c_short = -1;
-const DEFAULT_BACKGROUND: c_short = -1;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -75,11 +78,19 @@ pub fn main() !void {
     _ = ncurses.init_pair(2, DEFAULT_FOREGROUND, ncurses.COLOR_MAGENTA);
     // End of making color palettes
 
-    var main_win = main_menu.createWindow(@intCast(ncurses.LINES - 1), @intCast(ncurses.COLS - 1), 0, 0);
-    defer main_menu.destroyWindow(main_win);
+    var main_win = try MainWindow.init(
+        allocator,
+        @intCast(ncurses.LINES - 1),
+        @intCast(ncurses.COLS - 1),
+        0,
+        0,
+        "Zigup",
+    );
+    defer main_win.deinit();
 
     var cursor = Cursor{ .row = 3, .col = 2 };
-    try main_menu.decorateMainWindow(main_win, allocator, &json_contents.value, cursor);
+    var max_keydown_row: usize = undefined;
+    try main_win.decorate(&json_contents.value, cursor, &max_keydown_row);
 
     var chr: c_int = 0;
     while (true) {
@@ -88,36 +99,44 @@ pub fn main() !void {
         switch (chr) {
             'q' => break,
             'w', ncurses.KEY_UP => cursor.row = @max(cursor.row -| 1, 3),
-            's', ncurses.KEY_DOWN => cursor.row = @min(
-                cursor.row +| 1,
-                @as(usize, @intCast(@max(0, ncurses.LINES - 3))),
-            ),
-            '\n' => try dumpJSON(allocator, &json_contents.value, cursor),
+            's', ncurses.KEY_DOWN => cursor.row = @min(cursor.row +| 1, max_keydown_row),
+            '\n' => try targetMenuEventLoop(allocator, &json_contents.value, cursor),
             else => {},
         }
         time.sleep(time.ns_per_ms * 20);
 
-        main_menu.destroyWindow(main_win);
-        main_win = main_menu.createWindow(
-            @intCast(ncurses.LINES - 1),
-            @intCast(ncurses.COLS - 1),
-            0,
-            0,
-        );
-        try main_menu.decorateMainWindow(main_win, allocator, &json_contents.value, cursor);
+        try main_win.decorate(&json_contents.value, cursor, &max_keydown_row);
     }
 }
 
-const JsonValue = std.json.Value;
-fn dumpJSON(allocator: Allocator, json_value: *const JsonValue, cursor: Cursor) !void {
-    var win = main_menu.createWindow(
+fn targetMenuEventLoop(
+    allocator: Allocator,
+    json_value: *const JsonValue,
+    cursor: Cursor,
+) !void {
+    const idx = cursor.row -| 3;
+    const raw_zig_version = json_value.object.keys()[idx];
+    const zig_info = json_value.object.get(raw_zig_version) orelse return error.InvalidJSON;
+    const zig_version = zig_version: {
+        if (mem.eql(u8, raw_zig_version, "master")) {
+            break :zig_version (zig_info.object.get("version") orelse return error.InvalidJSON).string;
+        } else {
+            break :zig_version raw_zig_version;
+        }
+    };
+
+    var target_menu = try TargetMenu.init(
+        allocator,
         @intCast(@divTrunc(ncurses.LINES, 2)),
         @intCast(@divTrunc(ncurses.COLS, 2)),
         @intCast(@divTrunc(ncurses.LINES, 4)),
         @intCast(@divTrunc(ncurses.COLS, 4)),
+        "Version Info",
+        zig_version,
     );
-    defer main_menu.destroyWindow(win);
-    try decorateDumpJson(win, allocator, json_value, cursor);
+    defer target_menu.deinit();
+
+    try target_menu.decorate(&zig_info, cursor);
 
     var chr: c_int = 0;
     while (true) {
@@ -129,60 +148,6 @@ fn dumpJSON(allocator: Allocator, json_value: *const JsonValue, cursor: Cursor) 
         }
         time.sleep(time.ns_per_ms * 20);
 
-        main_menu.destroyWindow(win);
-        win = main_menu.createWindow(
-            @intCast(@divTrunc(ncurses.LINES, 2)),
-            @intCast(@divTrunc(ncurses.COLS, 2)),
-            @intCast(@divTrunc(ncurses.LINES, 4)),
-            @intCast(@divTrunc(ncurses.COLS, 4)),
-        );
-
-        try decorateDumpJson(win, allocator, json_value, cursor);
+        try target_menu.decorate(&zig_info, cursor);
     }
-}
-
-fn decorateDumpJson(
-    win: ?*ncurses.WINDOW,
-    allocator: Allocator,
-    json_value: *const JsonValue,
-    cursor: Cursor,
-) !void {
-    const idx = cursor.row -| 3;
-    const zig_version = json_value.object.keys()[idx];
-    const zig_info = json_value.object.get(zig_version) orelse return error.InvalidJSON;
-
-    const title = "Version Info";
-
-    const zig_version_null = zig_version: {
-        if (mem.eql(u8, zig_version, "master")) {
-            const master_version = (zig_info.object.get("version") orelse return error.InvalidJSON).string;
-            break :zig_version try allocator.dupeZ(u8, master_version);
-        } else {
-            break :zig_version try allocator.dupeZ(u8, zig_version);
-        }
-    };
-    defer allocator.free(zig_version_null);
-
-    _ = ncurses.box(win, 0, 0);
-    _ = ncurses.mvwprintw(win, 0, @divTrunc(ncurses.getmaxx(win) -| @as(c_int, title.len), 2), title);
-    _ = ncurses.mvwprintw(win, 1, 1, "Version: ");
-    _ = ncurses.mvwprintw(win, 1, @intCast(1 + "Version: ".len), @ptrCast(zig_version_null));
-
-    var iter = zig_info.object.iterator();
-    var i: c_int = 3;
-    event_loop: while (iter.next()) |entry| {
-        for ([_][]const u8{ "version", "date", "docs", "stdDocs", "src", "notes" }) |str| {
-            if (mem.eql(u8, str, entry.key_ptr.*)) {
-                continue :event_loop;
-            }
-        }
-
-        const target_info = &entry.value_ptr.object;
-        const tarball_null = try allocator.dupeZ(u8, target_info.get("tarball").?.string);
-        defer allocator.free(tarball_null);
-
-        _ = ncurses.mvwprintw(win, i, 1, @ptrCast(tarball_null));
-        i += 1;
-    }
-    _ = ncurses.wrefresh(win);
 }
