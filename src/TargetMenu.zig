@@ -21,6 +21,7 @@ win: ?*ncurses.WINDOW,
 allocator: Allocator,
 title: [:0]const u8,
 zig_version: [:0]const u8,
+target_name: ?[]const u8,
 
 const Self = @This();
 
@@ -43,6 +44,7 @@ pub fn init(
         .allocator = allocator,
         .title = title_z,
         .zig_version = version_z,
+        .target_name = null,
     };
 }
 
@@ -52,13 +54,20 @@ pub fn deinit(self: Self) void {
     self.allocator.free(self.zig_version);
 }
 
+pub fn getBegYX(self: *const Self) Cursor {
+    return .{
+        .row = @intCast(ncurses.getbegy(self.win)),
+        .col = @intCast(ncurses.getbegx(self.win)),
+    };
+}
+
 pub fn decorate(
-    self: Self,
+    self: *Self,
     zig_info: *const JsonValue,
     cursor: Cursor,
+    max_keydown_row: *usize,
+    min_keydown_row: *usize,
 ) !void {
-    _ = cursor;
-
     _ = ncurses.box(self.win, 0, 0);
     _ = ncurses.mvwprintw(
         self.win,
@@ -71,6 +80,8 @@ pub fn decorate(
 
     var iter = zig_info.object.iterator();
     var i: c_int = 3;
+    const win_beg_y = ncurses.getbegy(self.win);
+    min_keydown_row.* = @intCast(win_beg_y + 3);
     event_loop: while (iter.next()) |entry| {
         for ([_][]const u8{ "version", "date", "docs", "stdDocs", "src", "notes" }) |str| {
             if (mem.eql(u8, str, entry.key_ptr.*)) {
@@ -78,12 +89,25 @@ pub fn decorate(
             }
         }
 
-        const target_info = &entry.value_ptr.object;
-        const tarball_null = try self.allocator.dupeZ(u8, target_info.get("tarball").?.string);
-        defer self.allocator.free(tarball_null);
+        const target_name_null = try self.allocator.dupeZ(u8, entry.key_ptr.*);
+        defer self.allocator.free(target_name_null);
 
-        _ = ncurses.mvwprintw(self.win, i, 1, @ptrCast(tarball_null));
+        if (cursor.row == i + win_beg_y) {
+            self.target_name = entry.key_ptr.*;
+            _ = ncurses.wattron(self.win, ncurses.COLOR_PAIR(2));
+            _ = ncurses.mvwprintw(self.win, i, 1, @ptrCast(target_name_null));
+            _ = ncurses.wattroff(self.win, ncurses.COLOR_PAIR(2));
+        } else {
+            _ = ncurses.mvwprintw(self.win, i, 1, @ptrCast(target_name_null));
+        }
+
         i += 1;
     }
+    max_keydown_row.* = @intCast(win_beg_y + @min(i, ncurses.getmaxy(self.win)) -| 1);
+
     _ = ncurses.wrefresh(self.win);
+}
+
+pub fn getTargetName(self: Self) ?[]const u8 {
+    return self.target_name;
 }
