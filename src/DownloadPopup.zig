@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const window = @import("./window.zig");
+const fmt = std.fmt;
 
 const ncurses = switch (builtin.os.tag) {
     .linux, .macos => @cImport({
@@ -17,12 +18,26 @@ const ArrayList = std.ArrayList;
 const Cursor = @import("./cursor.zig");
 const JsonValue = std.json.Value;
 
+pub const TargetInfo = struct {
+    tarball_url: []const u8,
+    shasum: []const u8,
+    content_size: u64,
+};
+
+pub const DownloadState = packed struct {
+    is_download_choose: bool,
+    is_download_selected: bool,
+    download_finished: bool,
+};
+
 win: ?*ncurses.WINDOW,
 allocator: Allocator,
 title: [:0]const u8,
 height: usize,
 width: usize,
-is_download: bool,
+x: usize,
+y: usize,
+state: DownloadState,
 
 const Self = @This();
 
@@ -41,13 +56,12 @@ pub fn init(
         .win = window.createWindow(height, width, x, y),
         .allocator = allocator,
         .title = title_z,
-        .height = undefined,
-        .width = undefined,
-        .is_download = false,
+        .height = height,
+        .width = width,
+        .x = x,
+        .y = y,
+        .state = @bitCast(@as(u3, 0)),
     };
-
-    self.height = @intCast(ncurses.getmaxy(self.win));
-    self.width = @intCast(ncurses.getmaxx(self.win));
 
     return self;
 }
@@ -57,14 +71,30 @@ pub fn deinit(self: Self) void {
     self.allocator.free(self.title);
 }
 
-pub fn decorate(
-    self: Self,
-    zig_info: *const JsonValue,
-    target_name: []const u8,
-) !void {
-    _ = target_name;
-    _ = zig_info;
+pub fn getTargetInfo(self: Self, zig_info: *const JsonValue, target_name: []const u8) !TargetInfo {
+    _ = self;
 
+    var output: TargetInfo = undefined;
+    const target_info = zig_info.object.get(target_name) orelse return error.CannotGetTargetInfo;
+    output.tarball_url = target_url: {
+        const tmp = target_info.object.get("tarball") orelse return error.CannotGetTarballUrl;
+        break :target_url tmp.string;
+    };
+    output.shasum = target_shasum: {
+        const tmp = target_info.object.get("shasum") orelse return error.CannotGetTarballUrl;
+        break :target_shasum tmp.string;
+    };
+    output.content_size = content_size: {
+        const tmp = target_info.object.get("size") orelse return error.CannotGetTarballUrl;
+        break :content_size try fmt.parseInt(u64, tmp.string, 10);
+    };
+
+    return output;
+}
+
+pub fn preDownloadDecorate(
+    self: Self,
+) void {
     _ = ncurses.box(self.win, 0, 0);
     _ = ncurses.mvwprintw(
         self.win,
@@ -75,7 +105,7 @@ pub fn decorate(
 
     _ = ncurses.mvwprintw(self.win, 3, 3, "Are you sure to download this version?");
 
-    if (self.is_download) {
+    if (self.state.is_download_choose) {
         _ = ncurses.wattron(self.win, ncurses.COLOR_PAIR(2));
     }
     _ = ncurses.mvwprintw(
@@ -84,7 +114,7 @@ pub fn decorate(
         @intCast(@divTrunc(self.width, 4) - 4),
         "< Yes >",
     );
-    if (self.is_download) {
+    if (self.state.is_download_choose) {
         _ = ncurses.wattroff(self.win, ncurses.COLOR_PAIR(2));
     } else {
         _ = ncurses.wattron(self.win, ncurses.COLOR_PAIR(2));
@@ -95,22 +125,35 @@ pub fn decorate(
         @intCast(@divTrunc(self.width, 4) * 3 - 3),
         "< No >",
     );
-    if (!self.is_download) {
+    if (!self.state.is_download_choose) {
         _ = ncurses.wattroff(self.win, ncurses.COLOR_PAIR(2));
     }
 
-    // var target_info = zig_info.object.get(target_name) orelse return error.CannotGetTargetInfo;
-    // var iter = target_info.object.iterator();
-    // var i: c_int = 3;
-    // while (iter.next()) |entry| : (i += 1) {
-    //     const target_name_null = try self.allocator.dupeZ(u8, entry.key_ptr.*);
-    //     defer self.allocator.free(target_name_null);
-    //     const foo = try self.allocator.dupeZ(u8, entry.value_ptr.*.string);
-    //     defer self.allocator.free(foo);
+    _ = ncurses.wrefresh(self.win);
+}
 
-    //     _ = ncurses.mvwprintw(self.win, i, 1, @ptrCast(target_name_null));
-    //     _ = ncurses.mvwprintw(self.win, i, 10, @ptrCast(foo));
-    // }
+pub fn downloadDecorate(
+    self: *Self,
+    bytes_read_total: u64,
+    content_size: u64,
+) !void {
+    window.destroyWindow(self.win);
+    self.win = window.createWindow(self.height, self.width, self.x, self.y);
 
+    _ = ncurses.box(self.win, 0, 0);
+    _ = ncurses.mvwprintw(
+        self.win,
+        0,
+        @divTrunc(ncurses.getmaxx(self.win) -| @as(c_int, @intCast(self.title.len)), 2),
+        self.title,
+    );
+    _ = ncurses.mvwprintw(self.win, 3, 3, "Downloading...");
+
+    const info = try fmt.allocPrintZ(self.allocator, "{} of total {}", .{
+        bytes_read_total,
+        content_size,
+    });
+    defer self.allocator.free(info);
+    _ = ncurses.mvwprintw(self.win, 4, 3, info);
     _ = ncurses.wrefresh(self.win);
 }

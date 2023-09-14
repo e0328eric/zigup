@@ -35,9 +35,10 @@ pub fn main() !void {
     // Take a JSON file from Web
     const json_bytes = try download.downloadContentIntoMemory(
         allocator,
-        false,
-        0,
+        null,
         compiler_json_link,
+        null,
+        0,
     );
     defer {
         json_bytes.body.deinit();
@@ -193,7 +194,7 @@ fn downloadZigCompiler(
     );
     defer download_popup.deinit();
 
-    try download_popup.decorate(zig_info, target_name);
+    download_popup.preDownloadDecorate();
 
     var chr: c_int = 0;
     while (true) {
@@ -205,11 +206,30 @@ fn downloadZigCompiler(
             ncurses.KEY_LEFT,
             'd',
             ncurses.KEY_RIGHT,
-            => download_popup.is_download = !download_popup.is_download,
+            => download_popup.state.is_download_choose = !download_popup.state.is_download_choose,
+            '\n' => if (download_popup.state.is_download_choose) {
+                const target_info = try download_popup.getTargetInfo(zig_info, target_name);
+                download_popup.state.is_download_selected = true;
+
+                // TODO: Check shasum with the downloaded file in the memory.
+                // TODO: Implement a name maker for the tarball.
+                try download.downloadContentIntoFile(
+                    allocator,
+                    &download_popup,
+                    target_info.tarball_url,
+                    target_info.content_size,
+                    "./test.tar.xz",
+                    time.ns_per_ms * 50,
+                );
+
+                if (download_popup.state.download_finished) {
+                    break;
+                }
+            } else break,
             else => {},
         }
         time.sleep(time.ns_per_ms * 20);
 
-        try download_popup.decorate(zig_info, target_name);
+        download_popup.preDownloadDecorate();
     }
 }
