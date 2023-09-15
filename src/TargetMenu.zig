@@ -54,6 +54,10 @@ pub fn deinit(self: Self) void {
     self.allocator.free(self.zig_version);
 }
 
+pub fn refresh(self: *const Self) void {
+    _ = ncurses.wrefresh(self.win);
+}
+
 pub fn getBegYX(self: *const Self) Cursor {
     return .{
         .row = @intCast(ncurses.getbegy(self.win)),

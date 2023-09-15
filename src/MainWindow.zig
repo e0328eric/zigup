@@ -39,6 +39,10 @@ pub fn deinit(self: Self) void {
     self.allocator.free(self.title);
 }
 
+pub fn refresh(self: *const Self) void {
+    _ = ncurses.wrefresh(self.win);
+}
+
 pub fn decorate(self: Self, json: *const JsonValue, cursor: Cursor, max_keydown_row: *usize) !void {
     var acs_hline = ncurses.NCURSES_ACS('q');
 

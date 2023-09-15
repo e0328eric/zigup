@@ -6,8 +6,13 @@ const io = std.io;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
+const MainWindow = @import("./MainWindow.zig");
+const TargetMenu = @import("./TargetMenu.zig");
 const DownloadPopup = @import("./DownloadPopup.zig");
 const JsonValue = std.json.Value;
+
+const TAR_XZ_MIME = @import("./constants.zig").TAR_XZ_MIME;
+const ZIP_MIME = @import("./constants.zig").ZIP_MIME;
 
 pub fn downloadContentIntoMemory(
     allocator: Allocator,
@@ -67,16 +72,14 @@ pub fn downloadContentIntoMemory(
 
 pub fn downloadContentIntoFile(
     allocator: Allocator,
+    main_win: *const MainWindow,
+    target_menu: *const TargetMenu,
     download_popup: ?*DownloadPopup,
     url: []const u8,
     content_size: ?u64,
-    filepath: []const u8,
+    filename_prefix: []const u8,
     comptime sleep_nanosecs: u64,
 ) !void {
-    var file = try fs.cwd().createFile(filepath, .{});
-    defer file.close();
-    var file_buf_writer = io.bufferedWriter(file.writer());
-
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
 
@@ -91,9 +94,29 @@ pub fn downloadContentIntoFile(
     try req.start();
     try req.wait();
 
-    var buf = try allocator.alloc(u8, 2000000);
+    var buf = try allocator.alloc(u8, 3000000);
     defer allocator.free(buf);
     @memset(buf, 0);
+
+    const extension = extension: {
+        const file_mime = req.response.headers.getFirstValue("Content-Type") orelse "text/plain";
+        inline for ([_]struct { mine: []const u8, ext: []const u8 }{
+            .{ .mine = TAR_XZ_MIME, .ext = "tar.xz" },
+            .{ .mine = ZIP_MIME, .ext = "zip" },
+        }) |mime_info| {
+            if (std.mem.eql(u8, mime_info.mine, file_mime)) {
+                break :extension mime_info.ext;
+            }
+        }
+        return error.InvalidMime;
+    };
+
+    const filename = try std.fmt.allocPrint(allocator, "{s}.{s}", .{ filename_prefix, extension });
+    defer allocator.free(filename);
+
+    var file = try fs.cwd().createFile(filename, .{});
+    defer file.close();
+    var file_buf_writer = io.bufferedWriter(file.writer());
 
     var bytes_read_total: usize = 0;
     while (true) {
@@ -101,6 +124,8 @@ pub fn downloadContentIntoFile(
         bytes_read_total += bytes_read;
         if (bytes_read == 0) break;
         if (download_popup) |dp| {
+            main_win.refresh();
+            target_menu.refresh();
             try dp.downloadDecorate(@intCast(bytes_read_total), content_size.?);
         }
         _ = try file_buf_writer.write(buf[0..bytes_read]);

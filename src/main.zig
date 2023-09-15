@@ -6,6 +6,7 @@ const window = @import("./window.zig");
 const mem = std.mem;
 const json = std.json;
 const time = std.time;
+const process = std.process;
 
 const ncurses = switch (builtin.os.tag) {
     .linux, .macos => @cImport({
@@ -24,19 +25,27 @@ const JsonValue = std.json.Value;
 
 const DEFAULT_FOREGROUND = @import("./constants.zig").DEFAULT_FOREGROUND;
 const DEFAULT_BACKGROUND = @import("./constants.zig").DEFAULT_BACKGROUND;
+const COMPILER_JSON_LINK = @import("./constants.zig").COMPILER_JSON_LINK;
 
-const compiler_json_link: []const u8 = "https://ziglang.org/download/index.json";
+// global variable
+var output_filename: [:0]const u8 = undefined;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
+    var args = try process.argsWithAllocator(allocator);
+    // skip first argument
+    _ = args.skip();
+
+    output_filename = if (args.next()) |filename| filename else return error.NoFilenameGiven;
+
     // Take a JSON file from Web
     const json_bytes = try download.downloadContentIntoMemory(
         allocator,
         null,
-        compiler_json_link,
+        COMPILER_JSON_LINK,
         null,
         0,
     );
@@ -107,7 +116,7 @@ pub fn main() !void {
             's', ncurses.KEY_DOWN => cursor.row = @min(cursor.row +| 1, max_keydown_row),
             '\n' => {
                 const idx = cursor.row -| 3;
-                try targetMenuEventLoop(allocator, &json_contents.value, idx);
+                try targetMenuEventLoop(allocator, &main_win, &json_contents.value, idx);
             },
             else => {},
         }
@@ -119,6 +128,7 @@ pub fn main() !void {
 
 fn targetMenuEventLoop(
     allocator: Allocator,
+    main_win: *const MainWindow,
     json_value: *const JsonValue,
     idx: usize,
 ) !void {
@@ -168,18 +178,28 @@ fn targetMenuEventLoop(
 
                 const title_writer = title.writer();
                 try title_writer.print("{s}/{s}", .{ zig_version, target_name });
-                try downloadZigCompiler(allocator, &zig_info, title.items, target_name);
+                try downloadZigCompiler(
+                    allocator,
+                    main_win,
+                    &target_menu,
+                    &zig_info,
+                    title.items,
+                    target_name,
+                );
             },
             else => {},
         }
         time.sleep(time.ns_per_ms * 20);
 
+        main_win.refresh();
         try target_menu.decorate(&zig_info, cursor, &max_keydown_row, &min_keydown_row);
     }
 }
 
 fn downloadZigCompiler(
     allocator: Allocator,
+    main_win: *const MainWindow,
+    target_menu: *const TargetMenu,
     zig_info: *const JsonValue,
     title: []const u8,
     target_name: []const u8,
@@ -215,10 +235,12 @@ fn downloadZigCompiler(
                 // TODO: Implement a name maker for the tarball.
                 try download.downloadContentIntoFile(
                     allocator,
+                    main_win,
+                    target_menu,
                     &download_popup,
                     target_info.tarball_url,
                     target_info.content_size,
-                    "./test.tar.xz",
+                    output_filename,
                     time.ns_per_ms * 50,
                 );
 
@@ -230,6 +252,8 @@ fn downloadZigCompiler(
         }
         time.sleep(time.ns_per_ms * 20);
 
+        main_win.refresh();
+        target_menu.refresh();
         download_popup.preDownloadDecorate();
     }
 }
