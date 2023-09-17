@@ -8,3 +8,11 @@ pub const TAR_XZ_MIME: []const u8 = "application/x-xz";
 pub const ZIP_MIME: []const u8 = "application/zip";
 
 pub const COMPILER_JSON_LINK: []const u8 = "https://ziglang.org/download/index.json";
+
+pub const USAGE_INFO: []const u8 =
+    \\ Usage:
+    \\     zigup <OUTPUT-FILENAME>
+    \\
+    \\ Note:
+    \\     OUTPUT-FILENAME can not contain an extension suffix.
+;

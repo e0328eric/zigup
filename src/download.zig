@@ -78,7 +78,6 @@ pub fn downloadContentIntoFile(
     url: []const u8,
     content_size: ?u64,
     filename_prefix: []const u8,
-    comptime sleep_nanosecs: u64,
 ) !void {
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
@@ -94,9 +93,7 @@ pub fn downloadContentIntoFile(
     try req.start();
     try req.wait();
 
-    var buf = try allocator.alloc(u8, 3000000);
-    defer allocator.free(buf);
-    @memset(buf, 0);
+    var buf = [_]u8{0} ** 4096;
 
     const extension = extension: {
         const file_mime = req.response.headers.getFirstValue("Content-Type") orelse "text/plain";
@@ -120,7 +117,7 @@ pub fn downloadContentIntoFile(
 
     var bytes_read_total: usize = 0;
     while (true) {
-        const bytes_read = try req.reader().read(buf);
+        const bytes_read = try req.read(&buf);
         bytes_read_total += bytes_read;
         if (bytes_read == 0) break;
         if (download_popup) |dp| {
@@ -129,9 +126,6 @@ pub fn downloadContentIntoFile(
             try dp.downloadDecorate(@intCast(bytes_read_total), content_size.?);
         }
         _ = try file_buf_writer.write(buf[0..bytes_read]);
-        if (sleep_nanosecs > 0) {
-            std.time.sleep(sleep_nanosecs);
-        }
     }
     try file_buf_writer.flush();
 

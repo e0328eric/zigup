@@ -154,6 +154,27 @@ pub fn downloadDecorate(
         content_size,
     });
     defer self.allocator.free(info);
+
     _ = ncurses.mvwprintw(self.win, 4, 3, info);
+
+    const progress_bar_len = self.width -| 9;
+    if (progress_bar_len > 5) {
+        // zig fmt: off
+        const portion = @as(usize, @intFromFloat(
+            @as(f64, @floatFromInt(bytes_read_total * progress_bar_len)) / @as(f64, @floatFromInt(content_size))
+        ));
+        // zig fmt: on
+
+        _ = ncurses.mvwprintw(self.win, 5, 3, "[");
+        for (0..progress_bar_len) |i| {
+            if (i < portion) {
+                _ = ncurses.mvwprintw(self.win, 5, @intCast(i + 4), "=");
+            } else {
+                _ = ncurses.mvwprintw(self.win, 5, @intCast(i + 4), " ");
+            }
+        }
+        _ = ncurses.mvwprintw(self.win, 5, @intCast(self.width -| 4), "]");
+    }
+
     _ = ncurses.wrefresh(self.win);
 }
