@@ -32,7 +32,7 @@ pub fn downloadContentIntoMemory(
     var req = try client.request(.GET, uri, headers, .{});
     defer req.deinit();
 
-    try req.start();
+    try req.start(.{});
     try req.wait();
 
     var body = try ArrayList(u8).initCapacity(allocator, comptime std.math.pow(usize, 2, 15));
@@ -90,7 +90,7 @@ pub fn downloadContentIntoFile(
     var req = try client.request(.GET, uri, headers, .{});
     defer req.deinit();
 
-    try req.start();
+    try req.start(.{});
     try req.wait();
 
     var buf = [_]u8{0} ** 4096;
