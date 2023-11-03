@@ -1,19 +1,12 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const download = @import("./download.zig");
 const window = @import("./window.zig");
+const ncurses = @import("./ncurses.zig");
 
 const mem = std.mem;
 const json = std.json;
 const time = std.time;
 const process = std.process;
-
-const ncurses = switch (builtin.os.tag) {
-    .linux, .macos => @cImport({
-        @cInclude("ncurses.h");
-    }),
-    else => @compileError("This program uses <ncurses.h> and targeting OS does not supports it."),
-};
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;

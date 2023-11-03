@@ -1,14 +1,7 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const window = @import("./window.zig");
 const fmt = std.fmt;
-
-const ncurses = switch (builtin.os.tag) {
-    .linux, .macos => @cImport({
-        @cInclude("ncurses.h");
-    }),
-    else => @compileError("This program uses <ncurses.h> and targeting OS does not supports it."),
-};
+const ncurses = @import("./ncurses.zig");
 
 const mem = std.mem;
 const time = std.time;
