@@ -6,9 +6,6 @@ const io = std.io;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
-const MainWindow = @import("./MainWindow.zig");
-const TargetMenu = @import("./TargetMenu.zig");
-const DownloadPopup = @import("./DownloadPopup.zig");
 const JsonValue = std.json.Value;
 
 const TAR_XZ_MIME = @import("../constants.zig").TAR_XZ_MIME;
@@ -16,11 +13,12 @@ const ZIP_MIME = @import("../constants.zig").ZIP_MIME;
 
 pub fn downloadContentIntoMemory(
     allocator: Allocator,
-    download_popup: ?*DownloadPopup,
     url: []const u8,
     content_size: ?u64,
     comptime sleep_nanosecs: u64,
 ) !struct { body: ArrayList(u8), mime: ArrayList(u8) } {
+    _ = content_size;
+
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
 
@@ -46,19 +44,12 @@ pub fn downloadContentIntoMemory(
         const bytes_read = try req.reader().read(&buf);
         bytes_read_total += bytes_read;
         if (bytes_read == 0) break;
-        if (download_popup) |dp| {
-            try dp.downloadDecorate(@intCast(bytes_read_total), content_size.?);
-        }
         _ = try body_writer.write(buf[0..bytes_read]);
         if (sleep_nanosecs > 0) {
             std.time.sleep(sleep_nanosecs);
         }
     }
     try body_writer.flush();
-
-    if (download_popup) |dp| {
-        dp.state.download_finished = true;
-    }
 
     const content_type = mime: {
         var output = ArrayList(u8).init(allocator);
@@ -72,13 +63,12 @@ pub fn downloadContentIntoMemory(
 
 pub fn downloadContentIntoFile(
     allocator: Allocator,
-    main_win: *const MainWindow,
-    target_menu: *const TargetMenu,
-    download_popup: ?*DownloadPopup,
     url: []const u8,
     content_size: ?u64,
     filename_prefix: []const u8,
 ) !void {
+    _ = content_size;
+
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
 
@@ -108,7 +98,11 @@ pub fn downloadContentIntoFile(
         return error.InvalidMime;
     };
 
-    const filename = try std.fmt.allocPrint(allocator, "{s}.{s}", .{ filename_prefix, extension });
+    const filename = try std.fmt.allocPrint(
+        allocator,
+        "{s}.{s}",
+        .{ filename_prefix, extension },
+    );
     defer allocator.free(filename);
 
     var file = try fs.cwd().createFile(filename, .{});
@@ -120,16 +114,7 @@ pub fn downloadContentIntoFile(
         const bytes_read = try req.read(&buf);
         bytes_read_total += bytes_read;
         if (bytes_read == 0) break;
-        if (download_popup) |dp| {
-            main_win.refresh();
-            target_menu.refresh();
-            try dp.downloadDecorate(@intCast(bytes_read_total), content_size.?);
-        }
         _ = try file_buf_writer.write(buf[0..bytes_read]);
     }
     try file_buf_writer.flush();
-
-    if (download_popup) |dp| {
-        dp.state.download_finished = true;
-    }
 }

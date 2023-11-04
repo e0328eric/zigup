@@ -16,20 +16,22 @@ const TargetMenu = @import("./TargetMenu.zig");
 const DownloadPopup = @import("./DownloadPopup.zig");
 const JsonValue = std.json.Value;
 
-const DEFAULT_FOREGROUND = @import("./constants.zig").DEFAULT_FOREGROUND;
-const DEFAULT_BACKGROUND = @import("./constants.zig").DEFAULT_BACKGROUND;
-const COMPILER_JSON_LINK = @import("./constants.zig").COMPILER_JSON_LINK;
-const USAGE_INFO = @import("./constants.zig").USAGE_INFO;
+const DEFAULT_FOREGROUND = @import("../constants.zig").DEFAULT_FOREGROUND;
+const DEFAULT_BACKGROUND = @import("../constants.zig").DEFAULT_BACKGROUND;
+const COMPILER_JSON_LINK = @import("../constants.zig").COMPILER_JSON_LINK;
+const USAGE_INFO = @import("../constants.zig").USAGE_INFO;
 
 // global variable
 var output_filename: [:0]const u8 = undefined;
 
-pub fn main() !void {
+pub fn main_ncurses() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
     var args = try process.argsWithAllocator(allocator);
+    defer args.deinit();
+
     // skip first argument
     _ = args.skip();
 
@@ -39,7 +41,7 @@ pub fn main() !void {
         return error.NoFilenameGiven;
     };
 
-    // Take a JSON file from Web
+    // Take a JSON faile from Web
     const json_bytes = try download.downloadContentIntoMemory(
         allocator,
         null,

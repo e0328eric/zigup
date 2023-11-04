@@ -12,20 +12,24 @@ pub fn build(b: *std.Build) void {
     const use_ncurses = b.option(
         bool,
         "ncurses",
-        "use ncurses version",
+        \\tui version that uses ncurses
+        \\before compile this, the machine should have ncurses library
+        ,
     ) orelse default_use_ncurses;
 
-    const main_entry = if (use_ncurses) "src/ncurses/main.zig" else "src/cli/main.zig";
+    const exe_options = b.addOptions();
+    exe_options.addOption(bool, "use_ncurses", use_ncurses);
 
     const exe = b.addExecutable(.{
         .name = "zigup",
-        .root_source_file = .{ .path = main_entry },
+        .root_source_file = .{ .path = "./src/main.zig" },
         .target = target,
         .optimize = optimize,
     });
     if (use_ncurses) {
         exe.linkSystemLibrary("ncurses");
     }
+    exe.addOptions("zigup_build", exe_options);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
