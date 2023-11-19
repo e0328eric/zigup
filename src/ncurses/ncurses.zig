@@ -1,6 +1,6 @@
 const builtin = @import("builtin");
 
-const ncurses = switch (builtin.os.tag) {
+pub usingnamespace switch (builtin.os.tag) {
     .linux, .macos => @cImport({
         @cInclude("ncurses.h");
     }),
