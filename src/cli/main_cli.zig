@@ -1,10 +1,5 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const download = @import("./download.zig");
-const win = if (builtin.os.tag == .windows) @cImport({
-    @cDefine("WIN32_LEAN_AND_MEAN", {});
-    @cInclude("windows.h");
-}) else {};
 
 const fmt = std.fmt;
 const io = std.io;
@@ -80,18 +75,12 @@ pub fn main_cli() !void {
     );
     defer allocator.free(version_target_info.target_name);
 
-    // Download zig compiler
-    // TODO: Check shasum with the downloaded file in the memory.
-    // TODO: Implement a name maker for the tarball.
-    const target_info = try getTargetInfo(
-        version_target_info.zig_info,
-        version_target_info.target_name,
-    );
-    try download.downloadContentIntoFile(
+    try stdout.writeByte('\n');
+    try downloadContent(
         allocator,
-        target_info.tarball_url,
-        target_info.content_size,
+        &version_target_info,
         output_filename,
+        &stdout,
     );
 }
 
@@ -121,6 +110,12 @@ fn showZigVersions(
     );
 }
 
+const VersionTargetInfo = struct {
+    zig_info: *const JsonValue,
+    zig_version: []const u8,
+    target_name: []const u8,
+};
+
 // NOTE: The return string is allocated, so it should be freed
 fn showZigTargets(
     allocator: Allocator,
@@ -128,10 +123,7 @@ fn showZigTargets(
     idx: usize,
     stdin: *const Stdin,
     stdout: *const Stdout,
-) !struct {
-    zig_info: *const JsonValue,
-    target_name: []const u8,
-} {
+) !VersionTargetInfo {
     const raw_zig_version = json_value.object.keys()[idx];
     const zig_info = json_value.object.getPtr(raw_zig_version) orelse return error.InvalidJSON;
     const zig_version = zig_version: {
@@ -183,8 +175,45 @@ fn showZigTargets(
 
     return .{
         .zig_info = zig_info,
+        .zig_version = zig_version,
         .target_name = output,
     };
+}
+
+fn downloadContent(
+    allocator: Allocator,
+    version_target_info: *const VersionTargetInfo,
+    output_filename: []const u8,
+    stdout: *const Stdout,
+) !void {
+    const tty_config = tty.detectConfig(io.getStdOut());
+
+    try tty_config.setColor(stdout, .yellow);
+    try stdout.print("[Downloading Content] [Version: {s}, Target: {s}]\n", .{
+        version_target_info.zig_version,
+        version_target_info.target_name,
+    });
+    try tty_config.setColor(stdout, .reset);
+
+    // Download zig compiler
+    // TODO: Check shasum with the downloaded file in the memory.
+    // TODO: Implement a name maker for the tarball.
+    const target_info = try getTargetInfo(
+        version_target_info.zig_info,
+        version_target_info.target_name,
+    );
+    try download.downloadContentIntoFile(
+        allocator,
+        true,
+        target_info.tarball_url,
+        target_info.content_size,
+        output_filename,
+    );
+
+    try stdout.writeByte('\n');
+    try tty_config.setColor(stdout, .yellow);
+    try stdout.print("[Download Finished]\n", .{});
+    try tty_config.setColor(stdout, .reset);
 }
 
 const TargetInfo = struct {
@@ -193,7 +222,7 @@ const TargetInfo = struct {
     content_size: u64,
 };
 
-pub fn getTargetInfo(zig_info: *const JsonValue, target_name: []const u8) !TargetInfo {
+fn getTargetInfo(zig_info: *const JsonValue, target_name: []const u8) !TargetInfo {
     var output: TargetInfo = undefined;
     const target_info = zig_info.object.get(target_name) orelse return error.CannotGetTargetInfo;
     output.tarball_url = target_url: {

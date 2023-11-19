@@ -7,6 +7,7 @@ const io = std.io;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const JsonValue = std.json.Value;
+const Progressbar = @import("./Progressbar.zig");
 
 const TAR_XZ_MIME = @import("../constants.zig").TAR_XZ_MIME;
 const ZIP_MIME = @import("../constants.zig").ZIP_MIME;
@@ -63,12 +64,11 @@ pub fn downloadContentIntoMemory(
 
 pub fn downloadContentIntoFile(
     allocator: Allocator,
+    comptime print_progressbar: bool,
     url: []const u8,
-    content_size: ?u64,
+    content_size: u64,
     filename_prefix: []const u8,
 ) !void {
-    _ = content_size;
-
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
 
@@ -110,10 +110,15 @@ pub fn downloadContentIntoFile(
     var file_buf_writer = io.bufferedWriter(file.writer());
 
     var bytes_read_total: usize = 0;
+    const progress_bar = try Progressbar.init();
+
     while (true) {
         const bytes_read = try req.read(&buf);
         bytes_read_total += bytes_read;
         if (bytes_read == 0) break;
+        if (print_progressbar) {
+            try progress_bar.print(bytes_read_total, content_size);
+        }
         _ = try file_buf_writer.write(buf[0..bytes_read]);
     }
     try file_buf_writer.flush();
