@@ -45,7 +45,7 @@ pub fn init(
     const title_z = try allocator.dupeZ(u8, title);
     errdefer allocator.free(title);
 
-    var self = Self{
+    return Self{
         .win = window.createWindow(height, width, x, y),
         .allocator = allocator,
         .title = title_z,
@@ -55,8 +55,6 @@ pub fn init(
         .y = y,
         .state = @bitCast(@as(u3, 0)),
     };
-
-    return self;
 }
 
 pub fn deinit(self: Self) void {

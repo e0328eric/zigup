@@ -37,7 +37,7 @@ pub fn refresh(self: *const Self) void {
 }
 
 pub fn decorate(self: Self, json: *const JsonValue, cursor: Cursor, max_keydown_row: *usize) !void {
-    var acs_hline = ncurses.NCURSES_ACS('q');
+    const acs_hline = ncurses.NCURSES_ACS('q');
 
     _ = ncurses.wattron(self.win, ncurses.COLOR_PAIR(1));
     _ = ncurses.box(self.win, 0, 0);

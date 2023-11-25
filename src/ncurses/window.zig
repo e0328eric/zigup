@@ -7,7 +7,7 @@ pub fn createWindow(
     x: usize,
     y: usize,
 ) ?*ncurses.WINDOW {
-    var win = ncurses.newwin(@intCast(height), @intCast(width), @intCast(x), @intCast(y));
+    const win = ncurses.newwin(@intCast(height), @intCast(width), @intCast(x), @intCast(y));
     _ = ncurses.refresh();
 
     return win;

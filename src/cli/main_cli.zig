@@ -168,7 +168,7 @@ fn showZigTargets(
     );
     const target_name = target_names.items[target_name_idx];
 
-    var output = try allocator.alloc(u8, target_name.len);
+    const output = try allocator.alloc(u8, target_name.len);
     errdefer allocator.free(output);
 
     @memcpy(output, target_name);
