@@ -27,7 +27,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     if (use_ncurses) exe.linkSystemLibrary("ncurses");
-    if (builtin.os.tag == .windows) exe.linkLibC();
+    exe.linkLibC();
     exe.addOptions("zigup_build", exe_options);
     b.installArtifact(exe);
 
