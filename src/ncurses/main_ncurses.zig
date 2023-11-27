@@ -74,7 +74,6 @@ pub fn main_ncurses() !void {
     // TODO: Implement the branch in here
 
     if (!ncurses.has_colors()) {
-        _ = ncurses.endwin();
         std.debug.print("[ERROR]: This terminal does not support colors.\n", .{});
         std.debug.print("[NOTE]: There is a plan to support for non-colorable terminals.\n", .{});
         return error.NonColorableTerminal;
