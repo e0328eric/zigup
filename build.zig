@@ -28,7 +28,7 @@ pub fn build(b: *std.Build) void {
     });
     if (use_ncurses) exe.linkSystemLibrary("ncurses");
     exe.linkLibC();
-    exe.addOptions("zigup_build", exe_options);
+    exe.root_module.addOptions("zigup_build", exe_options);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);

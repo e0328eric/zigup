@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const fmt = std.fmt;
 const io = std.io;
@@ -6,6 +7,8 @@ const tty = std.io.tty;
 
 const Stdin = @TypeOf(io.getStdIn().reader());
 const Stdout = @TypeOf(io.getStdOut().writer());
+
+const NEWLINE_LEN = if (builtin.os.tag == .windows) 2 else 1;
 
 pub fn getInput(
     comptime T: type,
@@ -26,7 +29,7 @@ pub fn getInput(
         const bytes_read = try stdin.read(&buf);
 
         const tmp: struct { usize, bool } = blk: {
-            break :blk .{ fmt.parseInt(T, buf[0..bytes_read -| 2], 10) catch
+            break :blk .{ fmt.parseInt(T, buf[0..bytes_read -| NEWLINE_LEN], 10) catch
                 break :blk .{ 0, false }, true };
         };
         if (!tmp[1] or tmp[0] >= choose_max_val) {

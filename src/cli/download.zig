@@ -7,7 +7,7 @@ const io = std.io;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const JsonValue = std.json.Value;
-const Progressbar = @import("./Progressbar.zig");
+const Progressbar = @import("./progressbar.zig").Progressbar;
 
 const TAR_XZ_MIME = @import("../constants.zig").TAR_XZ_MIME;
 const ZIP_MIME = @import("../constants.zig").ZIP_MIME;
@@ -110,7 +110,7 @@ pub fn downloadContentIntoFile(
     var file_buf_writer = io.bufferedWriter(file.writer());
 
     var bytes_read_total: usize = 0;
-    const progress_bar = try Progressbar.init();
+    var progress_bar = try Progressbar.init();
 
     while (true) {
         const bytes_read = try req.read(&buf);
