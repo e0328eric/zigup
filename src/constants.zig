@@ -9,6 +9,8 @@ pub const ZIP_MIME: []const u8 = "application/zip";
 
 pub const COMPILER_JSON_LINK: []const u8 = "https://ziglang.org/download/index.json";
 
+pub const DEFAULT_FILENAME: [:0]const u8 = "zig-compiler";
+
 pub const USAGE_INFO: []const u8 =
     \\ Usage:
     \\     zigup <OUTPUT-FILENAME>

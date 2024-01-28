@@ -20,6 +20,7 @@ const DEFAULT_FOREGROUND = @import("../constants.zig").DEFAULT_FOREGROUND;
 const DEFAULT_BACKGROUND = @import("../constants.zig").DEFAULT_BACKGROUND;
 const COMPILER_JSON_LINK = @import("../constants.zig").COMPILER_JSON_LINK;
 const USAGE_INFO = @import("../constants.zig").USAGE_INFO;
+const DEFAULT_FILENAME = @import("../constants.zig").DEFAULT_FILENAME;
 
 // global variable
 var output_filename: [:0]const u8 = undefined;
@@ -35,11 +36,7 @@ pub fn main_ncurses() !void {
     // skip first argument
     _ = args.skip();
 
-    output_filename = if (args.next()) |filename| filename else {
-        std.log.err("[ERROR]: there is no output filename\n", .{});
-        std.log.err(USAGE_INFO, .{});
-        return error.NoFilenameGiven;
-    };
+    output_filename = if (args.next()) |filename| filename else DEFAULT_FILENAME;
 
     // Take a JSON faile from Web
     const json_bytes = try download.downloadContentIntoMemory(

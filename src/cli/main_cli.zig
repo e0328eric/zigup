@@ -19,6 +19,7 @@ const getInput = @import("./input_handler.zig").getInput;
 
 const COMPILER_JSON_LINK = @import("../constants.zig").COMPILER_JSON_LINK;
 const USAGE_INFO = @import("../constants.zig").USAGE_INFO;
+const DEFAULT_FILENAME = @import("../constants.zig").DEFAULT_FILENAME;
 
 pub fn main_cli() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -31,11 +32,7 @@ pub fn main_cli() !void {
     // skip first argument
     _ = args.skip();
 
-    const output_filename: [:0]const u8 = if (args.next()) |filename| filename else {
-        std.log.err("[ERROR]: there is no output filename\n", .{});
-        std.log.err(USAGE_INFO, .{});
-        return error.NoFilenameGiven;
-    };
+    const output_filename: [:0]const u8 = if (args.next()) |filename| filename else DEFAULT_FILENAME;
 
     // Take a JSON faile from Web
     const json_bytes = try download.downloadContentIntoMemory(
