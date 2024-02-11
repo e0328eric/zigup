@@ -6,7 +6,21 @@ const default_use_ncurses = switch (builtin.os.tag) {
     else => false,
 };
 
-pub fn build(b: *std.Build) void {
+pub const MIN_ZIG_VERSION_STR = "0.12.0-dev.2701+d18f52197";
+pub const MIN_ZIG_VERSION = std.SemanticVersion.parse(MIN_ZIG_VERSION_STR) catch unreachable;
+
+const Build = blk: {
+    const version = builtin.zig_version;
+    if (version.order(MIN_ZIG_VERSION) == .lt) {
+        @compileError(std.fmt.comptimePrint(
+            "Old zig is detected, (ver: {s}). Use the recent zig at least {s}.",
+            .{ builtin.zig_version_string, MIN_ZIG_VERSION_STR },
+        ));
+    }
+    break :blk std.Build;
+};
+
+pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const use_ncurses = b.option(
@@ -51,4 +65,37 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
+
+    // Release
+    const release_step = b.step("release", "Make zigup binaries for release");
+    const targets: []const std.Target.Query = &.{
+        .{ .cpu_arch = .aarch64, .os_tag = .macos },
+        .{ .cpu_arch = .aarch64, .os_tag = .linux },
+        .{ .cpu_arch = .x86_64, .os_tag = .macos },
+        .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .gnu },
+        .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .musl },
+        .{ .cpu_arch = .x86_64, .os_tag = .windows },
+    };
+
+    for (targets) |t| {
+        const release_exe = b.addExecutable(.{
+            .name = "zigup",
+            .root_source_file = .{ .path = "./src/main.zig" },
+            .target = b.resolveTargetQuery(t),
+            .optimize = .ReleaseSafe,
+        });
+
+        release_exe.linkLibC();
+        release_exe.root_module.addOptions("zigup_build", exe_options);
+
+        const target_output = b.addInstallArtifact(release_exe, .{
+            .dest_dir = .{
+                .override = .{
+                    .custom = try t.zigTriple(b.allocator),
+                },
+            },
+        });
+
+        release_step.dependOn(&target_output.step);
+    }
 }
