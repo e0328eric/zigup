@@ -1,5 +1,5 @@
 # zigup
-ncurses powered simple zig compiler downloader
+ncurses and simple cli powered simple zig compiler downloader
 
 ## How to download?
 Now, run this command to install zigup.
