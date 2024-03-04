@@ -6,7 +6,7 @@ const default_use_ncurses = switch (builtin.os.tag) {
     else => false,
 };
 
-pub const MIN_ZIG_VERSION_STR = "0.12.0-dev.2701+d18f52197";
+pub const MIN_ZIG_VERSION_STR = "0.12.0-dev.2925+88b3c1442";
 pub const MIN_ZIG_VERSION = std.SemanticVersion.parse(MIN_ZIG_VERSION_STR) catch unreachable;
 
 const Build = blk: {

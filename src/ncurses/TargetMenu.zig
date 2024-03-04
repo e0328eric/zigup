@@ -51,6 +51,10 @@ pub fn refresh(self: *const Self) void {
     _ = ncurses.wrefresh(self.win);
 }
 
+pub inline fn resize(self: Self, height: usize, width: usize) void {
+    window.resizeWindow(self.win, height, width);
+}
+
 pub fn getBegYX(self: *const Self) Cursor {
     return .{
         .row = @intCast(ncurses.getbegy(self.win)),

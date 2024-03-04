@@ -114,6 +114,7 @@ pub fn main_ncurses() !void {
                 const idx = cursor.row -| 3;
                 try targetMenuEventLoop(allocator, &main_win, &json_contents.value, idx);
             },
+            ncurses.KEY_RESIZE => main_win.resize(@intCast(ncurses.LINES - 1), @intCast(ncurses.COLS - 1)),
             else => {},
         }
         time.sleep(time.ns_per_ms * 20);

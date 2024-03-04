@@ -24,12 +24,10 @@ pub fn downloadContentIntoMemory(
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
 
+    const server_header_buffer = try allocator.alloc(u8, 2048);
+    defer allocator.free(server_header_buffer);
     const uri = try std.Uri.parse(url);
-    var headers = http.Headers.init(allocator);
-    defer headers.deinit();
-    try headers.append("accept", "*/*");
-
-    var req = try client.open(.GET, uri, headers, .{});
+    var req = try client.open(.GET, uri, .{ .server_header_buffer = server_header_buffer });
     defer req.deinit();
 
     try req.send(.{});
@@ -63,7 +61,7 @@ pub fn downloadContentIntoMemory(
     const content_type = mime: {
         var output = ArrayList(u8).init(allocator);
         errdefer output.deinit();
-        const tmp = req.response.headers.getFirstValue("Content-Type") orelse "text/plain";
+        const tmp = req.response.content_type orelse "text/plain";
         try output.appendSlice(tmp);
         break :mime output;
     };
@@ -82,12 +80,10 @@ pub fn downloadContentIntoFile(
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
 
+    const server_header_buffer = try allocator.alloc(u8, 2048);
+    defer allocator.free(server_header_buffer);
     const uri = try std.Uri.parse(url);
-    var headers = http.Headers.init(allocator);
-    defer headers.deinit();
-    try headers.append("accept", "*/*");
-
-    var req = try client.open(.GET, uri, headers, .{});
+    var req = try client.open(.GET, uri, .{ .server_header_buffer = server_header_buffer });
     defer req.deinit();
 
     try req.send(.{});
@@ -96,7 +92,7 @@ pub fn downloadContentIntoFile(
     var buf = [_]u8{0} ** 4096;
 
     const extension = extension: {
-        const file_mime = req.response.headers.getFirstValue("Content-Type") orelse "text/plain";
+        const file_mime = req.response.content_type orelse "text/plain";
         inline for ([_]struct { mine: []const u8, ext: []const u8 }{
             .{ .mine = TAR_XZ_MIME, .ext = "tar.xz" },
             .{ .mine = ZIP_MIME, .ext = "zip" },

@@ -13,6 +13,10 @@ pub fn createWindow(
     return win;
 }
 
+pub fn resizeWindow(win: ?*ncurses.WINDOW, height: usize, width: usize) void {
+    _ = ncurses.wresize(win, @intCast(height), @intCast(width));
+}
+
 pub fn destroyWindow(win: ?*ncurses.WINDOW) void {
     _ = ncurses.delwin(win);
 }

@@ -36,6 +36,10 @@ pub fn refresh(self: *const Self) void {
     _ = ncurses.wrefresh(self.win);
 }
 
+pub inline fn resize(self: Self, height: usize, width: usize) void {
+    window.resizeWindow(self.win, height, width);
+}
+
 pub fn decorate(self: Self, json: *const JsonValue, cursor: Cursor, max_keydown_row: *usize) !void {
     const acs_hline = ncurses.NCURSES_ACS('q');
 
