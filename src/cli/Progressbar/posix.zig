@@ -19,7 +19,7 @@ pub fn init() !Self {
     const stdout = io.getStdOut();
 
     var win_info: c.winsize = undefined;
-    if (c.ioctl(std.os.STDOUT_FILENO, c.TIOCGWINSZ, &win_info) < 0) {
+    if (c.ioctl(std.posix.STDOUT_FILENO, c.TIOCGWINSZ, &win_info) < 0) {
         log.err("Cannot get the terminal size", .{});
         return error.TermSizeNotObtained;
     }

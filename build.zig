@@ -6,7 +6,7 @@ const default_use_ncurses = switch (builtin.os.tag) {
     else => false,
 };
 
-pub const MIN_ZIG_VERSION_STR = "0.12.0-dev.2925+88b3c1442";
+pub const MIN_ZIG_VERSION_STR = "0.12.0-dev.3631+c4587dc9f";
 pub const MIN_ZIG_VERSION = std.SemanticVersion.parse(MIN_ZIG_VERSION_STR) catch unreachable;
 
 const Build = blk: {
@@ -39,6 +39,7 @@ pub fn build(b: *Build) !void {
         .root_source_file = .{ .path = "./src/main.zig" },
         .target = target,
         .optimize = optimize,
+        .strip = if (optimize == .Debug) false else true,
     });
     if (use_ncurses) exe.linkSystemLibrary("ncurses");
     exe.linkLibC();
