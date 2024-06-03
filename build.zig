@@ -1,12 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const default_use_ncurses = switch (builtin.os.tag) {
-    .macos, .linux => true,
-    else => false,
-};
+const default_use_ncurses = false;
 
-pub const MIN_ZIG_VERSION_STR = "0.12.0-dev.3631+c4587dc9f";
+pub const MIN_ZIG_VERSION_STR = "0.13.0-dev.351+64ef45eb0";
 pub const MIN_ZIG_VERSION = std.SemanticVersion.parse(MIN_ZIG_VERSION_STR) catch unreachable;
 
 const Build = blk: {
@@ -36,7 +33,7 @@ pub fn build(b: *Build) !void {
 
     const exe = b.addExecutable(.{
         .name = "zigup",
-        .root_source_file = .{ .path = "./src/main.zig" },
+        .root_source_file = b.path("./src/main.zig"),
         .target = target,
         .optimize = optimize,
         .strip = if (optimize == .Debug) false else true,
@@ -57,7 +54,7 @@ pub fn build(b: *Build) !void {
     run_step.dependOn(&run_cmd.step);
 
     const unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -81,9 +78,10 @@ pub fn build(b: *Build) !void {
     for (targets) |t| {
         const release_exe = b.addExecutable(.{
             .name = "zigup",
-            .root_source_file = .{ .path = "./src/main.zig" },
+            .root_source_file = b.path("./src/main.zig"),
             .target = b.resolveTargetQuery(t),
             .optimize = .ReleaseSafe,
+            .strip = true,
         });
 
         release_exe.linkLibC();
