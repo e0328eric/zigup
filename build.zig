@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 
 const default_use_ncurses = false;
 
-pub const MIN_ZIG_VERSION_STR = "0.13.0-dev.351+64ef45eb0";
+pub const MIN_ZIG_VERSION_STR = "0.13.0";
 pub const MIN_ZIG_VERSION = std.SemanticVersion.parse(MIN_ZIG_VERSION_STR) catch unreachable;
 
 const Build = blk: {
