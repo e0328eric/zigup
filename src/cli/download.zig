@@ -15,11 +15,8 @@ const ZIP_MIME = @import("../constants.zig").ZIP_MIME;
 pub fn downloadContentIntoMemory(
     allocator: Allocator,
     url: []const u8,
-    content_size: ?u64,
     comptime sleep_nanosecs: u64,
 ) !struct { body: ArrayList(u8), mime: ArrayList(u8) } {
-    _ = content_size;
-
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
 

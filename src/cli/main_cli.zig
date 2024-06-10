@@ -35,12 +35,7 @@ pub fn main_cli() !void {
     const output_filename: [:0]const u8 = if (args.next()) |filename| filename else DEFAULT_FILENAME;
 
     // Take a JSON faile from Web
-    const json_bytes = try download.downloadContentIntoMemory(
-        allocator,
-        COMPILER_JSON_LINK,
-        null,
-        0,
-    );
+    const json_bytes = try download.downloadContentIntoMemory(allocator, COMPILER_JSON_LINK, 0);
     defer {
         json_bytes.body.deinit();
         json_bytes.mime.deinit();
