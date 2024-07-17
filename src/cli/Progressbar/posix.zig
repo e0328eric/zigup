@@ -25,7 +25,7 @@ pub fn init() !Self {
     }
 
     output.stdout = io.bufferedWriter(stdout.writer());
-    output.length = @divTrunc(@as(usize, @intCast(win_info.ws_col)), 2);
+    output.length = @as(usize, @intCast(win_info.ws_col));
 
     return output;
 }
@@ -38,7 +38,7 @@ pub fn print(
     var writer = self.stdout.writer();
 
     const raw_progress_len = blk: {
-        const to_discard = 2 * log10Int(total) + 6;
+        const to_discard = 2 * log10Int(total) + 8;
         break :blk self.length -| to_discard;
     };
     const percent = @divTrunc(current * raw_progress_len, total);

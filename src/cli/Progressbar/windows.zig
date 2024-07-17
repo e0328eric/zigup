@@ -28,8 +28,8 @@ pub fn init() !Self {
         return error.CannotGetConsoleScreenBufInfo;
     }
 
-    // The length of the progress bar is (1/2)*width
-    output.length = @divTrunc(@as(usize, @intCast(console_info.dwSize.X)), 2);
+    // The length of the progress bar is width
+    output.length = @as(usize, @intCast(console_info.dwSize.X));
 
     return output;
 }
@@ -54,7 +54,7 @@ pub fn print(
     _ = win.SetConsoleCursorPosition(self.stdout, .{ .X = 0, .Y = cursor_pos.Y });
 
     const raw_progress_len = blk: {
-        const to_discard = 2 * log10Int(total) + 6;
+        const to_discard = 2 * log10Int(total) + 8;
         break :blk self.length -| to_discard;
     };
     const percent = @divTrunc(current * raw_progress_len, total);
