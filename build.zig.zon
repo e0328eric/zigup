@@ -1,0 +1,15 @@
+.{
+    .name = "zigup",
+    .version = "0.2.0",
+    .dependencies = .{
+        .badepo = .{
+            .url = "https://github.com/e0328eric/badepo/archive/08417bac006e1b8c100a5e35b21b6b43893a0832.tar.gz",
+            .hash = "12201ba4e226131a626f4c7df9014de13d1e95327e4a186f2e1f06f1316dacb8440a",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

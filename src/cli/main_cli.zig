@@ -32,10 +32,17 @@ pub fn main_cli() !void {
     // skip first argument
     _ = args.skip();
 
-    const output_filename: [:0]const u8 = if (args.next()) |filename| filename else DEFAULT_FILENAME;
+    const output_filename: [:0]const u8 = if (args.next()) |filename|
+        filename
+    else
+        DEFAULT_FILENAME;
 
     // Take a JSON faile from Web
-    const json_bytes = try download.downloadContentIntoMemory(allocator, COMPILER_JSON_LINK, 0);
+    const json_bytes = try download.downloadContentIntoMemory(
+        allocator,
+        COMPILER_JSON_LINK,
+        0,
+    );
     defer {
         json_bytes.body.deinit();
         json_bytes.mime.deinit();
@@ -56,7 +63,11 @@ pub fn main_cli() !void {
     const stdout = io.getStdOut().writer();
     const stdin = io.getStdIn().reader();
 
-    const idx = try showZigVersions(&json_contents.value, &stdin, &stdout);
+    const idx = try showZigVersions(
+        &json_contents.value,
+        &stdin,
+        &stdout,
+    );
     try stdout.writeByte('\n');
     const version_target_info = try showZigTargets(
         allocator,
@@ -117,7 +128,8 @@ fn showZigTargets(
     stdout: *const Stdout,
 ) !VersionTargetInfo {
     const raw_zig_version = json_value.object.keys()[idx];
-    const zig_info = json_value.object.getPtr(raw_zig_version) orelse return error.InvalidJSON;
+    const zig_info = json_value.object.getPtr(raw_zig_version) orelse
+        return error.InvalidJSON;
     const zig_version = zig_version: {
         if (mem.eql(u8, raw_zig_version, "master")) {
             break :zig_version (zig_info.object.get("version") orelse return error.InvalidJSON).string;
@@ -137,7 +149,14 @@ fn showZigTargets(
     defer target_names.deinit();
 
     fill_container: while (iter.next()) |entry| {
-        for ([_][]const u8{ "version", "date", "docs", "stdDocs", "src", "notes" }) |str| {
+        for ([_][]const u8{
+            "version",
+            "date",
+            "docs",
+            "stdDocs",
+            "src",
+            "notes",
+        }) |str| {
             if (mem.eql(u8, str, entry.key_ptr.*)) {
                 continue :fill_container;
             }

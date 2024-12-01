@@ -38,7 +38,12 @@ pub fn build(b: *Build) !void {
         .optimize = optimize,
         .strip = if (optimize == .Debug) false else true,
     });
-    if (use_ncurses) exe.linkSystemLibrary("ncurses");
+    if (use_ncurses) {
+        exe.linkSystemLibrary("ncurses");
+    } else {
+        const badepo = b.dependency("badepo", .{}).module("badepo");
+        exe.root_module.addImport("badepo", badepo);
+    }
     exe.linkLibC();
     exe.root_module.addOptions("zigup_build", exe_options);
     b.installArtifact(exe);
