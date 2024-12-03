@@ -1,2 +1,0 @@
-row: usize,
-col: usize,

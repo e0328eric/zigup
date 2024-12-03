@@ -1,6 +1,6 @@
 .{
     .name = "zigup",
-    .version = "0.2.0",
+    .version = "0.3.0",
     .dependencies = .{
         .badepo = .{
             .url = "https://github.com/e0328eric/badepo/archive/08417bac006e1b8c100a5e35b21b6b43893a0832.tar.gz",

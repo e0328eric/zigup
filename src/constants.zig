@@ -6,6 +6,7 @@ pub const MIN_WIDTH: usize = 10;
 
 pub const TAR_XZ_MIME: []const u8 = "application/x-xz";
 pub const ZIP_MIME: []const u8 = "application/zip";
+pub const OS_SPECIFIC: []const u8 = "application/octet-stream";
 
 pub const COMPILER_JSON_LINK: []const u8 = "https://ziglang.org/download/index.json";
 

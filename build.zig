@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 
 const default_use_ncurses = false;
 
-pub const MIN_ZIG_VERSION_STR = "0.14.0-dev.325+9356cb147";
+pub const MIN_ZIG_VERSION_STR = "0.14.0-dev.2362+a47aa9dd9";
 pub const MIN_ZIG_VERSION = std.SemanticVersion.parse(MIN_ZIG_VERSION_STR) catch unreachable;
 
 const Build = blk: {
@@ -20,16 +20,6 @@ const Build = blk: {
 pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const use_ncurses = b.option(
-        bool,
-        "ncurses",
-        \\tui version that uses ncurses
-        \\before compile this, the machine should have ncurses library
-        ,
-    ) orelse default_use_ncurses;
-
-    const exe_options = b.addOptions();
-    exe_options.addOption(bool, "use_ncurses", use_ncurses);
 
     const exe = b.addExecutable(.{
         .name = "zigup",
@@ -38,14 +28,9 @@ pub fn build(b: *Build) !void {
         .optimize = optimize,
         .strip = if (optimize == .Debug) false else true,
     });
-    if (use_ncurses) {
-        exe.linkSystemLibrary("ncurses");
-    } else {
-        const badepo = b.dependency("badepo", .{}).module("badepo");
-        exe.root_module.addImport("badepo", badepo);
-    }
+    const badepo = b.dependency("badepo", .{}).module("badepo");
     exe.linkLibC();
-    exe.root_module.addOptions("zigup_build", exe_options);
+    exe.root_module.addImport("badepo", badepo);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -88,9 +73,8 @@ pub fn build(b: *Build) !void {
             .optimize = .ReleaseSafe,
             .strip = true,
         });
-
         release_exe.linkLibC();
-        release_exe.root_module.addOptions("zigup_build", exe_options);
+        release_exe.root_module.addImport("badepo", badepo);
 
         const target_output = b.addInstallArtifact(release_exe, .{
             .dest_dir = .{
