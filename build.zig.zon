@@ -3,8 +3,8 @@
     .version = "0.3.0",
     .dependencies = .{
         .badepo = .{
-            .url = "https://github.com/e0328eric/badepo/archive/08417bac006e1b8c100a5e35b21b6b43893a0832.tar.gz",
-            .hash = "12201ba4e226131a626f4c7df9014de13d1e95327e4a186f2e1f06f1316dacb8440a",
+            .url = "https://github.com/e0328eric/badepo/archive/3463b7aaad08c98d6d579962e93c2afdbbe1e2c7.tar.gz",
+            .hash = "12203b842ccad156f5e73e763df9bda29e160f3db625aa218e2db28a0b809cd72b3f",
         },
     },
     .paths = .{
