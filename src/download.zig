@@ -10,6 +10,11 @@ const ArrayList = std.ArrayList;
 const JsonValue = std.json.Value;
 const Badepo = @import("badepo").Badepo;
 
+pub const Extension = enum(u1) {
+    tarball,
+    zip,
+};
+
 pub fn downloadContentIntoMemory(
     allocator: Allocator,
     url: []const u8,
@@ -61,7 +66,7 @@ pub fn downloadTarball(
     url: []const u8,
     content_size: u64,
     filename_prefix: []const u8,
-) !void {
+) !struct { []const u8, Extension } {
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
 
@@ -74,13 +79,16 @@ pub fn downloadTarball(
     try req.send();
     try req.wait();
 
-    var buf = [_]u8{0} ** 4096;
+    var buf: [4096]u8 = @splat(0);
 
-    const extension = extension: {
+    const extension, const ext_enum: Extension = extension: {
         const location = std.mem.lastIndexOfScalar(u8, url, '/').?;
         const tmp = std.fs.path.extension(url[location..]);
         // We know that if tmp == ".xz", the extension of which is ".tar.xz"
-        break :extension if (std.mem.eql(u8, tmp, ".xz")) ".tar.xz" else tmp;
+        break :extension if (std.mem.eql(u8, tmp, ".xz"))
+            .{ ".tar.xz", .tarball }
+        else
+            .{ tmp, .zip };
     };
 
     const filename = try std.fmt.allocPrint(
@@ -88,7 +96,7 @@ pub fn downloadTarball(
         "{s}{s}",
         .{ filename_prefix, extension },
     );
-    defer allocator.free(filename);
+    errdefer allocator.free(filename);
 
     var file = try fs.cwd().createFile(filename, .{});
     defer file.close();
@@ -108,4 +116,6 @@ pub fn downloadTarball(
         _ = try file_buf_writer.write(buf[0..bytes_read]);
     }
     try file_buf_writer.flush();
+
+    return .{ filename, ext_enum };
 }

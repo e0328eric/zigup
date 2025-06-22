@@ -213,15 +213,50 @@ fn downloadContent(
         version_target_info.zig_info,
         version_target_info.target_name,
     );
-    try download.downloadTarball(
+    const downloaded_filename, const ext = try download.downloadTarball(
         allocator,
         true,
         target_info.tarball_url,
         target_info.content_size,
         output_filename,
     );
-
+    defer allocator.free(downloaded_filename);
     try stdout.writeByte('\n');
+
+    try tty_config.setColor(stdout, .yellow);
+    try stdout.print("[Decompressing archive]\n", .{});
+    try tty_config.setColor(stdout, .reset);
+
+    try std.fs.cwd().makeDir(output_filename);
+
+    // TODO: make a progressbar for decompressing
+    var output_dir = try std.fs.cwd().openDir(output_filename, .{});
+    defer output_dir.close();
+    switch (ext) {
+        .tarball => {
+            var tar_file = try std.fs.cwd().openFile(downloaded_filename, .{});
+            defer tar_file.close();
+            var decompressed = try std.compress.xz.decompress(
+                allocator,
+                tar_file.reader(),
+            );
+            defer decompressed.deinit();
+            try std.tar.pipeToFileSystem(
+                output_dir,
+                decompressed.reader(),
+                .{ .mode_mode = .ignore },
+            );
+        },
+        .zip => {
+            var zip_file = try std.fs.cwd().openFile(downloaded_filename, .{});
+            defer zip_file.close();
+            const stream = zip_file.seekableStream();
+            try std.zip.extract(output_dir, stream, .{});
+        },
+    }
+
+    try std.fs.cwd().deleteFile(downloaded_filename);
+
     try tty_config.setColor(stdout, .yellow);
     try stdout.print("[Download Finished]\n", .{});
     try tty_config.setColor(stdout, .reset);
