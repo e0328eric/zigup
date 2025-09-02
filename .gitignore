@@ -1,4 +1,6 @@
 /.zig-cache
 /zig-out
 /.DS_Store
-
+/zig-compiler
+/zig-compiler.zip
+/zig-compiler.tar.xz

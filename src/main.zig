@@ -1,8 +1,8 @@
 const std = @import("std");
 const download = @import("./download.zig");
 
+const fs = std.fs;
 const fmt = std.fmt;
-const io = std.io;
 const json = std.json;
 const mem = std.mem;
 const process = std.process;
@@ -11,9 +11,8 @@ const tty = std.io.tty;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
+const Io = std.Io;
 const JsonValue = std.json.Value;
-const Stdin = @TypeOf(io.getStdIn().reader());
-const Stdout = @TypeOf(io.getStdOut().writer());
 
 const getInput = @import("./input_handler.zig").getInput;
 
@@ -38,14 +37,13 @@ pub fn main() !void {
         DEFAULT_FILENAME;
 
     // Take a JSON faile from Web
-    const json_bytes = try download.downloadContentIntoMemory(
+    var json_bytes = try download.downloadContentIntoMemory(
         allocator,
         COMPILER_JSON_LINK,
-        0,
     );
     defer {
-        json_bytes.body.deinit();
-        json_bytes.mime.deinit();
+        json_bytes.body.deinit(allocator);
+        json_bytes.mime.deinit(allocator);
     }
 
     if (!mem.eql(u8, json_bytes.mime.items, "application/json")) {
@@ -60,39 +58,47 @@ pub fn main() !void {
     );
     defer json_contents.deinit();
 
-    const stdout = io.getStdOut().writer();
-    const stdin = io.getStdIn().reader();
+    var stdin_buf: [2048]u8 = undefined;
+    var stdout_buf: [2048]u8 = undefined;
+    var stdin_reader = fs.File.stdin().reader(&stdin_buf);
+    var stdout_writer = fs.File.stdout().writer(&stdout_buf);
+    const stdin = &stdin_reader.interface;
+    const stdout = &stdout_writer.interface;
 
     const idx = try showZigVersions(
         &json_contents.value,
-        &stdin,
-        &stdout,
+        stdin,
+        stdout,
     );
     try stdout.writeByte('\n');
+    try stdout.flush();
+
     const version_target_info = try showZigTargets(
         allocator,
         &json_contents.value,
         idx,
-        &stdin,
-        &stdout,
+        stdin,
+        stdout,
     );
     defer allocator.free(version_target_info.target_name);
 
     try stdout.writeByte('\n');
+    try stdout.flush();
+
     try downloadContent(
         allocator,
         &version_target_info,
         output_filename,
-        &stdout,
+        stdout,
     );
 }
 
 fn showZigVersions(
     json_value: *const JsonValue,
-    stdin: *const Stdin,
-    stdout: *const Stdout,
+    stdin: *Io.Reader,
+    stdout: *Io.Writer,
 ) !usize {
-    const tty_config = tty.detectConfig(io.getStdOut());
+    const tty_config = tty.detectConfig(fs.File.stdout());
 
     try tty_config.setColor(stdout, .yellow);
     try stdout.writeAll("[Select Version]\n");
@@ -103,6 +109,7 @@ fn showZigVersions(
         // TODO: Align version strings
         try stdout.print("[{}]: {s}\n", .{ i, keys });
     }
+    try stdout.flush();
 
     return getInput(
         usize,
@@ -124,8 +131,8 @@ fn showZigTargets(
     allocator: Allocator,
     json_value: *const JsonValue,
     idx: usize,
-    stdin: *const Stdin,
-    stdout: *const Stdout,
+    stdin: *Io.Reader,
+    stdout: *Io.Writer,
 ) !VersionTargetInfo {
     const raw_zig_version = json_value.object.keys()[idx];
     const zig_info = json_value.object.getPtr(raw_zig_version) orelse
@@ -138,7 +145,7 @@ fn showZigTargets(
         }
     };
 
-    const tty_config = tty.detectConfig(io.getStdOut());
+    const tty_config = tty.detectConfig(fs.File.stdout());
 
     try tty_config.setColor(stdout, .yellow);
     try stdout.print("[Version: {s}] [Targets]\n", .{zig_version});
@@ -146,7 +153,7 @@ fn showZigTargets(
 
     var iter = zig_info.object.iterator();
     var target_names = try ArrayList([]const u8).initCapacity(allocator, 25);
-    defer target_names.deinit();
+    defer target_names.deinit(allocator);
 
     fill_container: while (iter.next()) |entry| {
         for ([_][]const u8{
@@ -162,13 +169,14 @@ fn showZigTargets(
             }
         }
 
-        try target_names.append(entry.key_ptr.*);
+        try target_names.append(allocator, entry.key_ptr.*);
     }
 
     for (target_names.items, 0..) |target_name, i| {
         // TODO: Align target strings
         try stdout.print("[{}]: {s}\n", .{ i, target_name });
     }
+    try stdout.flush();
 
     const target_name_idx = try getInput(
         usize,
@@ -195,9 +203,9 @@ fn downloadContent(
     allocator: Allocator,
     version_target_info: *const VersionTargetInfo,
     output_filename: []const u8,
-    stdout: *const Stdout,
+    stdout: *Io.Writer,
 ) !void {
-    const tty_config = tty.detectConfig(io.getStdOut());
+    const tty_config = tty.detectConfig(fs.File.stdout());
 
     try tty_config.setColor(stdout, .yellow);
     try stdout.print("[Downloading Content] [Version: {s}, Target: {s}]\n", .{
@@ -205,6 +213,7 @@ fn downloadContent(
         version_target_info.target_name,
     });
     try tty_config.setColor(stdout, .reset);
+    try stdout.flush();
 
     // Download zig compiler
     // TODO: Check shasum with the downloaded file in the memory.
@@ -226,40 +235,60 @@ fn downloadContent(
     try tty_config.setColor(stdout, .yellow);
     try stdout.print("[Decompressing archive]\n", .{});
     try tty_config.setColor(stdout, .reset);
+    try stdout.flush();
 
-    try std.fs.cwd().makeDir(output_filename);
+    std.fs.cwd().makeDir(output_filename) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => return err,
+    };
 
-    // TODO: make a progressbar for decompressing
-    var output_dir = try std.fs.cwd().openDir(output_filename, .{});
-    defer output_dir.close();
     switch (ext) {
         .tarball => {
-            var tar_file = try std.fs.cwd().openFile(downloaded_filename, .{});
-            defer tar_file.close();
-            var decompressed = try std.compress.xz.decompress(
-                allocator,
-                tar_file.reader(),
+            // TODO: I don't know why tar.pipeToFileSystem raises TarHeader error
+            // I will fix later soon
+            try tty_config.setColor(stdout, .magenta);
+            try stdout.print(
+                "Warning: Decompressing tar.xz option is not implemented yet.\n",
+                .{},
             );
-            defer decompressed.deinit();
-            try std.tar.pipeToFileSystem(
-                output_dir,
-                decompressed.reader(),
-                .{ .mode_mode = .ignore },
-            );
+            try tty_config.setColor(stdout, .reset);
+            try stdout.flush();
+
+            //var tar_buf: [std.compress.flate.max_window_len]u8 = undefined;
+            //var tar_file = try std.fs.cwd().openFile(downloaded_filename, .{});
+            //defer tar_file.close();
+            //var tar_file_reader = tar_file.reader(&tar_buf);
+            //try std.tar.pipeToFileSystem(
+            //    output_dir,
+            //    &tar_file_reader.interface,
+            //    .{ .mode_mode = .ignore },
+            //);
         },
         .zip => {
+            // TODO: make a progressbar for decompressing
+            var output_dir = try std.fs.cwd().openDir(output_filename, .{});
+            defer output_dir.close();
+
+            var zip_buf: [std.compress.flate.max_window_len]u8 = undefined;
             var zip_file = try std.fs.cwd().openFile(downloaded_filename, .{});
             defer zip_file.close();
-            const stream = zip_file.seekableStream();
-            try std.zip.extract(output_dir, stream, .{});
+            var zip_file_reader = zip_file.reader(&zip_buf);
+
+            var diag: std.zip.Diagnostics = .{ .allocator = allocator };
+            defer diag.deinit();
+            try std.zip.extract(
+                output_dir,
+                &zip_file_reader,
+                .{ .diagnostics = &diag },
+            );
+            try std.fs.cwd().deleteFile(downloaded_filename);
         },
     }
-
-    try std.fs.cwd().deleteFile(downloaded_filename);
 
     try tty_config.setColor(stdout, .yellow);
     try stdout.print("[Download Finished]\n", .{});
     try tty_config.setColor(stdout, .reset);
+    try stdout.flush();
 }
 
 const TargetInfo = struct {

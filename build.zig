@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 
 const default_use_ncurses = false;
 
-pub const MIN_ZIG_VERSION_STR = "0.14.0-dev.2362+a47aa9dd9";
+pub const MIN_ZIG_VERSION_STR = "0.15.1";
 pub const MIN_ZIG_VERSION = std.SemanticVersion.parse(MIN_ZIG_VERSION_STR) catch unreachable;
 
 const Build = blk: {
@@ -21,16 +21,24 @@ pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{
-        .name = "zigup",
-        .root_source_file = b.path("./src/main.zig"),
+    const badepo = b.dependency("badepo", .{
         .target = target,
         .optimize = optimize,
-        .strip = if (optimize == .Debug) false else true,
+    }).module("badepo");
+
+    const exe = b.addExecutable(.{
+        .name = "zigup",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("./src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .strip = if (optimize == .Debug) false else true,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "badepo", .module = badepo },
+            },
+        }),
     });
-    const badepo = b.dependency("badepo", .{}).module("badepo");
-    exe.linkLibC();
-    exe.root_module.addImport("badepo", badepo);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -44,9 +52,11 @@ pub fn build(b: *Build) !void {
     run_step.dependOn(&run_cmd.step);
 
     const unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
@@ -66,15 +76,25 @@ pub fn build(b: *Build) !void {
     };
 
     for (targets) |t| {
+        const cross_target = b.resolveTargetQuery(t);
+        const badepo_cross = b.dependency("badepo", .{
+            .target = cross_target,
+            .optimize = optimize,
+        }).module("badepo");
+
         const release_exe = b.addExecutable(.{
             .name = "zigup",
-            .root_source_file = b.path("./src/main.zig"),
-            .target = b.resolveTargetQuery(t),
-            .optimize = .ReleaseSafe,
-            .strip = true,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("./src/main.zig"),
+                .target = cross_target,
+                .optimize = .ReleaseSafe,
+                .strip = true,
+                .link_libc = true,
+                .imports = &.{
+                    .{ .name = "badepo", .module = badepo_cross },
+                },
+            }),
         });
-        release_exe.linkLibC();
-        release_exe.root_module.addImport("badepo", badepo);
 
         const target_output = b.addInstallArtifact(release_exe, .{
             .dest_dir = .{

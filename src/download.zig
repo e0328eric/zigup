@@ -5,6 +5,9 @@ const fs = std.fs;
 const http = std.http;
 const io = std.io;
 
+const assert = std.debug.assert;
+const max_window_len = std.compress.flate.max_window_len;
+
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const JsonValue = std.json.Value;
@@ -18,46 +21,43 @@ pub const Extension = enum(u1) {
 pub fn downloadContentIntoMemory(
     allocator: Allocator,
     url: []const u8,
-    comptime sleep_nanosecs: u64,
 ) !struct { body: ArrayList(u8), mime: ArrayList(u8) } {
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
 
-    const server_header_buffer = try allocator.alloc(u8, 2048);
-    defer allocator.free(server_header_buffer);
     const uri = try std.Uri.parse(url);
-    var req = try client.open(.GET, uri, .{ .server_header_buffer = server_header_buffer });
+    var req = try client.request(.GET, uri, .{});
     defer req.deinit();
 
-    try req.send();
-    try req.wait();
+    try req.sendBodiless();
+    var response = try req.receiveHead(&.{});
 
-    var body = try ArrayList(u8).initCapacity(allocator, comptime std.math.pow(usize, 2, 15));
+    // Pointers in response.head are invalidated when the response body stream is initialized.
+    var content_type = try std.Io.Writer.Allocating.initCapacity(allocator, 10);
+    errdefer content_type.deinit();
+    const content_type_raw = response.head.content_type orelse "text/plain";
+    try content_type.writer.writeAll(content_type_raw);
+
+    var request_buf: [100]u8 = undefined;
+    var decompress_buf: [max_window_len]u8 = undefined;
+    var decompress: http.Decompress = undefined;
+    const reader = response.readerDecompressing(
+        &request_buf,
+        &decompress,
+        &decompress_buf,
+    );
+
+    var body = try std.Io.Writer.Allocating.initCapacity(allocator, 100);
     errdefer body.deinit();
 
-    var buf = [_]u8{0} ** 4096;
-
-    var bytes_read_total: usize = 0;
-    var body_writer = io.bufferedWriter(body.writer());
     while (true) {
-        const bytes_read = try req.reader().read(&buf);
-        bytes_read_total += bytes_read;
-        if (bytes_read == 0) break;
-        _ = try body_writer.write(buf[0..bytes_read]);
-        if (sleep_nanosecs > 0) {
-            std.time.sleep(sleep_nanosecs);
-        }
+        _ = reader.stream(&body.writer, .unlimited) catch |err| switch (err) {
+            error.EndOfStream => break,
+            else => return err,
+        };
     }
-    try body_writer.flush();
 
-    const content_type = mime: {
-        var output = ArrayList(u8).init(allocator);
-        errdefer output.deinit();
-        const tmp = req.response.content_type orelse "text/plain";
-        try output.appendSlice(tmp);
-        break :mime output;
-    };
-    return .{ .body = body, .mime = content_type };
+    return .{ .body = body.toArrayList(), .mime = content_type.toArrayList() };
 }
 
 pub fn downloadTarball(
@@ -73,13 +73,22 @@ pub fn downloadTarball(
     const server_header_buffer = try allocator.alloc(u8, 2048);
     defer allocator.free(server_header_buffer);
     const uri = try std.Uri.parse(url);
-    var req = try client.open(.GET, uri, .{ .server_header_buffer = server_header_buffer });
+    var req = try client.request(.GET, uri, .{});
     defer req.deinit();
 
-    try req.send();
-    try req.wait();
+    try req.sendBodiless();
+    var response = try req.receiveHead(&.{});
 
-    var buf: [4096]u8 = @splat(0);
+    //var request_buf: [100]u8 = undefined;
+    //const reader = response.reader(&request_buf);
+    var request_buf: [100]u8 = undefined;
+    var decompress_buf: [max_window_len]u8 = undefined;
+    var decompress: http.Decompress = undefined;
+    const reader = response.readerDecompressing(
+        &request_buf,
+        &decompress,
+        &decompress_buf,
+    );
 
     const extension, const ext_enum: Extension = extension: {
         const location = std.mem.lastIndexOfScalar(u8, url, '/').?;
@@ -98,24 +107,27 @@ pub fn downloadTarball(
     );
     errdefer allocator.free(filename);
 
+    var file_buf: [4096]u8 = undefined;
     var file = try fs.cwd().createFile(filename, .{});
     defer file.close();
-    var file_buf_writer = io.bufferedWriter(file.writer());
+    var file_buf_writer = file.writer(&file_buf);
+    const writer = &file_buf_writer.interface;
 
     var bytes_read_total: usize = 0;
     var progress_bar = try Badepo.init(allocator);
     defer progress_bar.deinit();
 
     while (true) {
-        const bytes_read = try req.read(&buf);
-        bytes_read_total += bytes_read;
-        if (bytes_read == 0) break;
+        const bytes_read = reader.stream(writer, .unlimited) catch |err| switch (err) {
+            error.EndOfStream => break,
+            else => return err,
+        };
         if (print_progressbar) {
-            try progress_bar.print(bytes_read_total, content_size, null, .{});
+            try progress_bar.print(bytes_read_total, content_size);
         }
-        _ = try file_buf_writer.write(buf[0..bytes_read]);
+        bytes_read_total += bytes_read;
     }
-    try file_buf_writer.flush();
+    try writer.flush();
 
     return .{ filename, ext_enum };
 }

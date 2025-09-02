@@ -1,11 +1,11 @@
 .{
     .name = .zigup,
     .fingerprint = 0x7cbb96d088a2650b,
-    .version = "0.4.0",
+    .version = "0.5.0",
     .dependencies = .{
         .badepo = .{
-            .url = "git+https://github.com/e0328eric/badepo.git#3cd10606eadc55df6be546ce60e2ccb6cfee661b",
-            .hash = "badepo-0.1.0-bmhQEyQjAADMMvXBUYK7hcQgLAR1GFXn9SzYzRYkvu4N",
+            .url = "git+https://github.com/e0328eric/badepo.git#5cc99acfbf47a7b00c38f92467c6142f7fea1758",
+            .hash = "badepo-0.2.0-bmhQEz4fAAD5dKrlg_AeNFmap4_y4c70aPSn6DhRFjHJ",
         },
     },
     .paths = .{
