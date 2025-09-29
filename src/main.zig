@@ -7,7 +7,7 @@ const json = std.json;
 const mem = std.mem;
 const process = std.process;
 const time = std.time;
-const tty = std.io.tty;
+const tty = std.Io.tty;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -253,16 +253,6 @@ fn downloadContent(
             );
             try tty_config.setColor(stdout, .reset);
             try stdout.flush();
-
-            //var tar_buf: [std.compress.flate.max_window_len]u8 = undefined;
-            //var tar_file = try std.fs.cwd().openFile(downloaded_filename, .{});
-            //defer tar_file.close();
-            //var tar_file_reader = tar_file.reader(&tar_buf);
-            //try std.tar.pipeToFileSystem(
-            //    output_dir,
-            //    &tar_file_reader.interface,
-            //    .{ .mode_mode = .ignore },
-            //);
         },
         .zip => {
             // TODO: make a progressbar for decompressing

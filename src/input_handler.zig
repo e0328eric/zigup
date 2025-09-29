@@ -4,7 +4,7 @@ const builtin = @import("builtin");
 const fs = std.fs;
 const fmt = std.fmt;
 const Io = std.Io;
-const tty = std.io.tty;
+const tty = Io.tty;
 
 const NEWLINE_LEN = if (builtin.os.tag == .windows) 2 else 1;
 
