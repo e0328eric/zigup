@@ -1,13 +1,11 @@
 const std = @import("std");
 const download = @import("./download.zig");
 
-const fs = std.fs;
 const fmt = std.fmt;
 const json = std.json;
 const mem = std.mem;
 const process = std.process;
 const time = std.time;
-const tty = std.Io.tty;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -21,9 +19,13 @@ const USAGE_INFO = @import("./constants.zig").USAGE_INFO;
 const DEFAULT_FILENAME = @import("./constants.zig").DEFAULT_FILENAME;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
+
+    var threaded = Io.Threaded.init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
 
     var args = try process.argsWithAllocator(allocator);
     defer args.deinit();
@@ -39,6 +41,7 @@ pub fn main() !void {
     // Take a JSON faile from Web
     var json_bytes = try download.downloadContentIntoMemory(
         allocator,
+        io,
         COMPILER_JSON_LINK,
     );
     defer {
@@ -60,12 +63,13 @@ pub fn main() !void {
 
     var stdin_buf: [2048]u8 = undefined;
     var stdout_buf: [2048]u8 = undefined;
-    var stdin_reader = fs.File.stdin().reader(&stdin_buf);
-    var stdout_writer = fs.File.stdout().writer(&stdout_buf);
+    var stdin_reader = Io.File.stdin().reader(io, &stdin_buf);
+    var stdout_writer = Io.File.stdout().writer(io, &stdout_buf);
     const stdin = &stdin_reader.interface;
     const stdout = &stdout_writer.interface;
 
     const idx = try showZigVersions(
+        io,
         &json_contents.value,
         stdin,
         stdout,
@@ -75,6 +79,7 @@ pub fn main() !void {
 
     const version_target_info = try showZigTargets(
         allocator,
+        io,
         &json_contents.value,
         idx,
         stdin,
@@ -87,6 +92,7 @@ pub fn main() !void {
 
     try downloadContent(
         allocator,
+        io,
         &version_target_info,
         output_filename,
         stdout,
@@ -94,15 +100,17 @@ pub fn main() !void {
 }
 
 fn showZigVersions(
+    io: Io,
     json_value: *const JsonValue,
     stdin: *Io.Reader,
     stdout: *Io.Writer,
 ) !usize {
-    const tty_config = tty.detectConfig(fs.File.stdout());
+    const tty_mod = try Io.Terminal.Mode.detect(io, Io.File.stdout(), false, true);
+    const tty_term = Io.Terminal{ .writer = stdout, .mode = tty_mod };
 
-    try tty_config.setColor(stdout, .yellow);
+    try tty_term.setColor(.yellow);
     try stdout.writeAll("[Select Version]\n");
-    try tty_config.setColor(stdout, .reset);
+    try tty_term.setColor(.reset);
 
     const total_amount_version = json_value.object.keys().len;
     for (json_value.object.keys(), 0..) |keys, i| {
@@ -113,6 +121,7 @@ fn showZigVersions(
 
     return getInput(
         usize,
+        io,
         "Enter the number to select version: ",
         total_amount_version,
         stdin,
@@ -129,6 +138,7 @@ const VersionTargetInfo = struct {
 // NOTE: The return string is allocated, so it should be freed
 fn showZigTargets(
     allocator: Allocator,
+    io: Io,
     json_value: *const JsonValue,
     idx: usize,
     stdin: *Io.Reader,
@@ -145,11 +155,12 @@ fn showZigTargets(
         }
     };
 
-    const tty_config = tty.detectConfig(fs.File.stdout());
+    const tty_mod = try Io.Terminal.Mode.detect(io, Io.File.stdout(), false, true);
+    const tty_term = Io.Terminal{ .writer = stdout, .mode = tty_mod };
 
-    try tty_config.setColor(stdout, .yellow);
+    try tty_term.setColor(.yellow);
     try stdout.print("[Version: {s}] [Targets]\n", .{zig_version});
-    try tty_config.setColor(stdout, .reset);
+    try tty_term.setColor(.reset);
 
     var iter = zig_info.object.iterator();
     var target_names = try ArrayList([]const u8).initCapacity(allocator, 25);
@@ -180,6 +191,7 @@ fn showZigTargets(
 
     const target_name_idx = try getInput(
         usize,
+        io,
         "Enter the number to select target: ",
         target_names.items.len,
         stdin,
@@ -201,18 +213,20 @@ fn showZigTargets(
 
 fn downloadContent(
     allocator: Allocator,
+    io: Io,
     version_target_info: *const VersionTargetInfo,
     output_filename: []const u8,
     stdout: *Io.Writer,
 ) !void {
-    const tty_config = tty.detectConfig(fs.File.stdout());
+    const tty_mod = try Io.Terminal.Mode.detect(io, Io.File.stdout(), false, true);
+    const tty_term = Io.Terminal{ .writer = stdout, .mode = tty_mod };
 
-    try tty_config.setColor(stdout, .yellow);
+    try tty_term.setColor(.yellow);
     try stdout.print("[Downloading Content] [Version: {s}, Target: {s}]\n", .{
         version_target_info.zig_version,
         version_target_info.target_name,
     });
-    try tty_config.setColor(stdout, .reset);
+    try tty_term.setColor(.reset);
     try stdout.flush();
 
     // Download zig compiler
@@ -224,6 +238,7 @@ fn downloadContent(
     );
     const downloaded_filename, const ext = try download.downloadTarball(
         allocator,
+        io,
         true,
         target_info.tarball_url,
         target_info.content_size,
@@ -232,37 +247,53 @@ fn downloadContent(
     defer allocator.free(downloaded_filename);
     try stdout.writeByte('\n');
 
-    try tty_config.setColor(stdout, .yellow);
+    try tty_term.setColor(.yellow);
     try stdout.print("[Decompressing archive]\n", .{});
-    try tty_config.setColor(stdout, .reset);
+    try tty_term.setColor(.reset);
     try stdout.flush();
 
-    std.fs.cwd().makeDir(output_filename) catch |err| switch (err) {
+    Io.Dir.cwd().createDir(io, output_filename, .default_dir) catch |err| switch (err) {
         error.PathAlreadyExists => {},
         else => return err,
     };
 
     switch (ext) {
         .tarball => {
-            // TODO: I don't know why tar.pipeToFileSystem raises TarHeader error
-            // I will fix later soon
-            try tty_config.setColor(stdout, .magenta);
-            try stdout.print(
-                "Warning: Decompressing tar.xz option is not implemented yet.\n",
+            // TODO: make a progressbar for decompressing
+            var output_dir = try Io.Dir.cwd().openDir(io, output_filename, .{});
+            defer output_dir.close(io);
+
+            var tar_buf: [std.compress.flate.max_window_len]u8 = undefined;
+            var tar_file = try Io.Dir.cwd().openFile(io, downloaded_filename, .{});
+            defer tar_file.close(io);
+            var tar_file_reader = tar_file.reader(io, &tar_buf);
+
+            const decompress_buf = try allocator.alloc(u8, std.compress.flate.max_window_len);
+            errdefer allocator.free(decompress_buf);
+            var decompressor = try std.compress.xz.Decompress.init(
+                &tar_file_reader.interface,
+                allocator,
+                decompress_buf,
+            );
+            defer decompressor.deinit();
+
+            try std.tar.pipeToFileSystem(
+                io,
+                output_dir,
+                &decompressor.reader,
                 .{},
             );
-            try tty_config.setColor(stdout, .reset);
-            try stdout.flush();
+            try Io.Dir.cwd().deleteFile(io, downloaded_filename);
         },
         .zip => {
             // TODO: make a progressbar for decompressing
-            var output_dir = try std.fs.cwd().openDir(output_filename, .{});
-            defer output_dir.close();
+            var output_dir = try Io.Dir.cwd().openDir(io, output_filename, .{});
+            defer output_dir.close(io);
 
             var zip_buf: [std.compress.flate.max_window_len]u8 = undefined;
-            var zip_file = try std.fs.cwd().openFile(downloaded_filename, .{});
-            defer zip_file.close();
-            var zip_file_reader = zip_file.reader(&zip_buf);
+            var zip_file = try Io.Dir.cwd().openFile(io, downloaded_filename, .{});
+            defer zip_file.close(io);
+            var zip_file_reader = zip_file.reader(io, &zip_buf);
 
             var diag: std.zip.Diagnostics = .{ .allocator = allocator };
             defer diag.deinit();
@@ -271,13 +302,13 @@ fn downloadContent(
                 &zip_file_reader,
                 .{ .diagnostics = &diag },
             );
-            try std.fs.cwd().deleteFile(downloaded_filename);
+            try Io.Dir.cwd().deleteFile(io, downloaded_filename);
         },
     }
 
-    try tty_config.setColor(stdout, .yellow);
+    try tty_term.setColor(.yellow);
     try stdout.print("[Download Finished]\n", .{});
-    try tty_config.setColor(stdout, .reset);
+    try tty_term.setColor(.reset);
     try stdout.flush();
 }
 

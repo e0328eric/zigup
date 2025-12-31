@@ -3,15 +3,18 @@ const builtin = @import("builtin");
 
 const default_use_ncurses = false;
 
-pub const MIN_ZIG_VERSION_STR = "0.15.1";
-pub const MIN_ZIG_VERSION = std.SemanticVersion.parse(MIN_ZIG_VERSION_STR) catch unreachable;
+const ZIGUP_VERSION_STR = @import("build.zig.zon").version;
+const ZIGUP_VERSION = std.SemanticVersion.parse(ZIGUP_VERSION_STR) catch unreachable;
+const MIN_ZIG_STRING = @import("build.zig.zon").minimum_zig_version;
+const MIN_ZIG = std.SemanticVersion.parse(MIN_ZIG_STRING) catch unreachable;
+const PROGRAM_NAME = @tagName(@import("build.zig.zon").name);
 
 const Build = blk: {
     const version = builtin.zig_version;
-    if (version.order(MIN_ZIG_VERSION) == .lt) {
+    if (version.order(MIN_ZIG) == .lt) {
         @compileError(std.fmt.comptimePrint(
             "Old zig is detected, (ver: {s}). Use the recent zig at least {s}.",
-            .{ builtin.zig_version_string, MIN_ZIG_VERSION_STR },
+            .{ builtin.zig_version_string, MIN_ZIG_STRING },
         ));
     }
     break :blk std.Build;
@@ -27,7 +30,8 @@ pub fn build(b: *Build) !void {
     }).module("badepo");
 
     const exe = b.addExecutable(.{
-        .name = "zigup",
+        .name = PROGRAM_NAME,
+        .version = ZIGUP_VERSION,
         .root_module = b.createModule(.{
             .root_source_file = b.path("./src/main.zig"),
             .target = target,
@@ -83,7 +87,8 @@ pub fn build(b: *Build) !void {
         }).module("badepo");
 
         const release_exe = b.addExecutable(.{
-            .name = "zigup",
+            .name = PROGRAM_NAME,
+            .version = ZIGUP_VERSION,
             .root_module = b.createModule(.{
                 .root_source_file = b.path("./src/main.zig"),
                 .target = cross_target,
