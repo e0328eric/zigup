@@ -18,16 +18,11 @@ const COMPILER_JSON_LINK = @import("./constants.zig").COMPILER_JSON_LINK;
 const USAGE_INFO = @import("./constants.zig").USAGE_INFO;
 const DEFAULT_FILENAME = @import("./constants.zig").DEFAULT_FILENAME;
 
-pub fn main() !void {
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: process.Init) !void {
+    const allocator = init.arena.allocator();
+    const io = init.io;
 
-    var threaded = Io.Threaded.init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    var args = try process.argsWithAllocator(allocator);
+    var args = try init.minimal.args.iterateAllocator(allocator);
     defer args.deinit();
 
     // skip first argument
