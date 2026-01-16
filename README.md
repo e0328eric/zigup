@@ -1,8 +1,1 @@
-# zigup
-simple cli powered simple zig compiler downloader
-
-## How to download?
-Now, run this command to install zigup.
-```console
-$ zig build --prefix-exe-dir ~/.local/bin -Doptimize=ReleaseSafe
-```
+## move to [Codeberg](https://codeberg.org/e0328eric/zigup)
