@@ -2,7 +2,7 @@
     .name = .zigup,
     .fingerprint = 0x7cbb96d088a2650b,
     .version = "0.5.0",
-    .minimum_zig_version = "0.16.0-dev.1859+212968c57",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .badepo = .{
             .url = "git+https://github.com/e0328eric/badepo.git#8a4fa425027460469e964ff375244c3fada112e0",
